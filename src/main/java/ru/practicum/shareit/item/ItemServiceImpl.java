@@ -28,13 +28,8 @@ public class ItemServiceImpl implements ItemService {
     public ItemDto create(Long userId, ItemDto itemDto) {
         User owner = userService.getUserOrThrow(userId);
 
-        Item item = new Item();
+        Item item = ItemMapper.toItem(itemDto, owner);
         item.setId(nextId++);
-        item.setName(itemDto.getName());
-        item.setDescription(itemDto.getDescription());
-        item.setAvailable(itemDto.getAvailable());
-        item.setOwner(owner);
-        item.setRequest(null);
 
         items.put(item.getId(), item);
         return ItemMapper.toDto(item);
@@ -87,7 +82,7 @@ public class ItemServiceImpl implements ItemService {
         String searchText = text.toLowerCase().trim();
 
         return items.values().stream()
-                .filter(item -> Boolean.TRUE.equals(item.getAvailable()))
+                .filter(item -> item.getAvailable())
                 .filter(item -> containsText(item.getName(), searchText)
                         || containsText(item.getDescription(), searchText))
                 .map(ItemMapper::toDto)
