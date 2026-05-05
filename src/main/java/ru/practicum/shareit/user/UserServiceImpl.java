@@ -1,30 +1,28 @@
 package ru.practicum.shareit.user;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import ru.practicum.shareit.user.dto.UserDto;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    private final Map<Long, User> users = new LinkedHashMap<>();
-    private long nextId = 1L;
+    private final UserRepository userRepository;
 
     @Override
     public UserDto create(UserDto userDto) {
-        validateEmail(userDto.getEmail(), null);
+        validateEmailForCreate(userDto.getEmail());
 
         User user = UserMapper.toUser(userDto);
-        user.setId(nextId++);
+        User savedUser = userRepository.save(user);
 
-        users.put(user.getId(), user);
-        return UserMapper.toDto(user);
+        return UserMapper.toDto(savedUser);
     }
 
     @Override
@@ -36,11 +34,12 @@ public class UserServiceImpl implements UserService {
         }
 
         if (userDto.getEmail() != null) {
-            validateEmail(userDto.getEmail(), userId);
+            validateEmailForUpdate(userDto.getEmail(), userId);
             existingUser.setEmail(userDto.getEmail());
         }
 
-        return UserMapper.toDto(existingUser);
+        User savedUser = userRepository.save(existingUser);
+        return UserMapper.toDto(savedUser);
     }
 
     @Override
@@ -50,7 +49,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Collection<UserDto> getAll() {
-        return users.values().stream()
+        return userRepository.findAll()
+                .stream()
                 .map(UserMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -58,29 +58,34 @@ public class UserServiceImpl implements UserService {
     @Override
     public void delete(Long userId) {
         getUserOrThrow(userId);
-        users.remove(userId);
+        userRepository.deleteById(userId);
     }
 
     @Override
     public User getUserOrThrow(Long userId) {
-        User user = users.get(userId);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден");
-        }
-        return user;
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Пользователь не найден"
+                ));
     }
 
-    private void validateEmail(String email, Long currentUserId) {
+    private void validateEmailForCreate(String email) {
         if (email == null || email.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email не может быть пустым");
         }
 
-        boolean emailExists = users.values().stream()
-                .anyMatch(user -> user.getEmail() != null
-                        && user.getEmail().equalsIgnoreCase(email)
-                        && (currentUserId == null || !user.getId().equals(currentUserId)));
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email уже используется");
+        }
+    }
 
-        if (emailExists) {
+    private void validateEmailForUpdate(String email, Long userId) {
+        if (email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email не может быть пустым");
+        }
+
+        if (userRepository.existsByEmailIgnoreCaseAndIdNot(email, userId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email уже используется");
         }
     }
