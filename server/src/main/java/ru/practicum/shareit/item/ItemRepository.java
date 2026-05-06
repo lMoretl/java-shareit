@@ -13,4 +13,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             String name,
             String description
     );
+
+    List<Item> findAllByRequestId(Long requestId);
 }
